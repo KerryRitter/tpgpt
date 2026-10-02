@@ -58,6 +58,6 @@ cargo run --release --locked -p tpgpt
 cargo test --release --locked
 ```
 
-Build bundles with `./scripts/bundle-native.sh` on Linux/macOS or `./scripts/bundle-windows.ps1` on Windows. GitHub Actions builds on each platform, checks the source for private files and common credential formats, runs unit tests and an MCP smoke check, and assembles releases from explicitly selected artifacts. Dependency license notices are included in every bundle.
+Build bundles with `./scripts/bundle-native.sh` on Linux/macOS or `./scripts/bundle-windows.ps1` on Windows. GitHub Actions builds on each platform, checks the source for private files and common credential formats, audits dependencies, runs unit tests and an MCP smoke check, and assembles releases from explicitly selected artifacts. Dependency license notices are included in every bundle. See [publication and security checks](docs/SECURITY.md) for scope and remaining upstream warnings.
 
 The original [TypeScript export and MCP tools](docs/legacy-tools.md) are retained for development and command-line use. They are not bundled with the desktop app.

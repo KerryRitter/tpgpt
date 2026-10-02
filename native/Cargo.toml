@@ -25,7 +25,7 @@ csv = "1"
 base64 = "0.22"
 flate2 = "1"
 fitparser = "0.10"
-quick-xml = { version = "0.38", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 directories = "6"
 
 [dev-dependencies]

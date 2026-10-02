@@ -18,6 +18,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  audit:
+    name: Dependency security audit
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Audit npm dependencies
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+      - name: Audit Rust dependencies
+        run: |
+          tool_dir="$RUNNER_TEMP/tpgpt-audit"
+          mkdir -p "$tool_dir"
+          curl --fail --location --silent --show-error 'https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-musl-v0.22.2.tgz' -o "$tool_dir/audit.tgz"
+          printf '%s  %s\n' '7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428' "$tool_dir/audit.tgz" | sha256sum --check
+          tar -xzf "$tool_dir/audit.tgz" -C "$tool_dir"
+          "$tool_dir/cargo-audit-x86_64-unknown-linux-musl-v0.22.2/cargo-audit" audit
+
   build:
     name: ${{ matrix.platform }}
     strategy:
@@ -62,6 +85,7 @@ jobs:
             ~/.cargo/git
             target
           key: cargo-${{ runner.os }}-${{ runner.arch }}-1.96.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-1.96.0-
       - name: Format
         run: cargo fmt --all -- --check
       - name: Lint
@@ -108,7 +132,7 @@ jobs:
 
   publish:
     name: Publish complete release
-    needs: build
+    needs: [build, audit]
     if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     permissions:
