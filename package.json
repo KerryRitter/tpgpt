@@ -1,0 +1,34 @@
+{
+  "name": "trainingpeaks-export-importer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Download TrainingPeaks exports and consolidate them into SQLite",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/cli.ts",
+    "mcp": "tsx src/mcp/server.ts",
+    "mcp:index": "tsx src/mcp/index-activities.ts",
+    "mcp:smoke": "tsx src/mcp/smoke-client.ts",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@garmin/fitsdk": "^21.214.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "csv-parse": "^7.0.2",
+    "fast-xml-parser": "^5.11.1",
+    "yauzl": "^3.2.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^24.0.0",
+    "@types/yauzl": "^2.10.3",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

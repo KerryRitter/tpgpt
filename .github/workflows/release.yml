@@ -1,0 +1,141 @@
+name: Build and release
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a release after all platform builds succeed
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux x86_64
+            os: ubuntu-22.04
+            artifact: linux-x86_64
+          - platform: Windows x86_64
+            os: windows-2022
+            artifact: windows-x86_64
+          - platform: macOS Apple Silicon
+            os: macos-15
+            artifact: macos-arm64
+          - platform: macOS Intel
+            os: macos-15-intel
+            artifact: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Audit published source
+        run: python scripts/audit-publication.py
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libxkbcommon-dev libegl1-mesa-dev
+      - name: Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.96.0
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --release --locked --all-targets -- -D warnings
+      - name: Native tests
+        run: cargo test --release --locked
+      - name: Set up Node for legacy and browser-hook checks
+        if: runner.os == 'Linux'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Legacy and browser-hook checks
+        if: runner.os == 'Linux'
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+          npm run build
+      - name: Bundle Linux or macOS
+        if: runner.os != 'Windows'
+        run: ./scripts/bundle-native.sh
+      - name: Bundle Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/bundle-windows.ps1
+      - name: Native MCP smoke check
+        shell: bash
+        run: |
+          executable=target/release/tpgpt
+          if [ "$RUNNER_OS" = 'Windows' ]; then executable="$executable.exe"; fi
+          python scripts/smoke-native.py "$executable"
+      - name: Upload only release bundles
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            native/bundle/tpgpt_*.deb
+            native/bundle/tpgpt-linux-*.tar.gz
+            native/bundle/tpgpt-windows-*.zip
+            native/bundle/tpgpt-macos-*.zip
+            native/bundle/tpgpt-macos-*.dmg
+
+  publish:
+    name: Publish complete release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Verify bundle set and generate checksums
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, re
+          version = re.search(r'^version = "([^"]+)"', pathlib.Path('native/Cargo.toml').read_text(), re.M)[1]
+          directory = pathlib.Path('release-assets')
+          expected = {f'tpgpt_{version}_amd64.deb', 'tpgpt-linux-x86_64.tar.gz', 'tpgpt-windows-x86_64.zip', 'tpgpt-macos-arm64.zip', 'tpgpt-macos-arm64.dmg', 'tpgpt-macos-x86_64.zip', 'tpgpt-macos-x86_64.dmg'}
+          assert {p.name for p in directory.iterdir()} == expected, 'Missing or unexpected bundle'
+          assert all(p.stat().st_size > 1000000 for p in directory.iterdir()), 'Unexpectedly small bundle'
+          sums = ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(directory.iterdir()))
+          (directory / 'SHA256SUMS').write_text(sums)
+          pathlib.Path('release-tag.txt').write_text('v' + version)
+          PY
+      - name: Publish bundles together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$(cat release-tag.txt)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'This version already has a release; bump the package version.' >&2
+            exit 1
+          fi
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "TPGPT $tag" --notes-file "docs/releases/$tag.md"
+          gh release upload "$tag" release-assets/*
+          gh release edit "$tag" --draft=false --latest

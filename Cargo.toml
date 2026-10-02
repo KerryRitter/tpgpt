@@ -1,0 +1,13 @@
+[workspace]
+members = ["native"]
+resolver = "2"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.release]
+debug = 0
+strip = true
+opt-level = 2
+codegen-units = 16
