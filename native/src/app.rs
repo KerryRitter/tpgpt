@@ -2,12 +2,14 @@ use crate::{
     browser::CapturedAuth,
     data,
     importer::{self, ImportConfig},
+    insights::{self, ChartData, ChartSpec, Dashboard},
     process::{self, ChatStream, CliStatus},
     store::{ChatStore, Message, Result, Session, Settings},
 };
 use eframe::egui;
 use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader},
     path::PathBuf,
     process::{Child, Stdio},
@@ -16,8 +18,18 @@ use std::{
 };
 use tokio::sync::watch;
 
+#[path = "home_ui.rs"]
+mod home;
 #[path = "app_ui.rs"]
 mod view;
+
+struct WorkoutPane {
+    database: String,
+    id: i64,
+    result: Option<Result<Value>>,
+    activity_id: Option<i64>,
+    activity: Option<Result<Value>>,
+}
 
 enum Event {
     Auth(CapturedAuth),
@@ -42,6 +54,25 @@ enum Event {
         generation: u64,
         index: usize,
         status: CliStatus,
+    },
+    Dashboard {
+        generation: u64,
+        result: Box<Result<Dashboard>>,
+    },
+    Chart {
+        key: String,
+        result: Result<ChartData>,
+    },
+    Workout {
+        database: String,
+        id: i64,
+        result: Result<Value>,
+    },
+    Activity {
+        database: String,
+        id: i64,
+        file_id: i64,
+        result: Result<Value>,
     },
 }
 
@@ -76,6 +107,15 @@ struct Desktop {
     clis: [CliStatus; 2],
     cli_generation: u64,
     setup_open: bool,
+    home_open: bool,
+    dashboard: Option<Result<Dashboard>>,
+    dashboard_generation: u64,
+    home_sport: String,
+    chart_metric: insights::Metric,
+    miles: bool,
+    selected_period: Option<(String, String)>,
+    charts: HashMap<String, Option<Result<ChartData>>>,
+    workout_pane: Option<WorkoutPane>,
 }
 
 pub fn run(login: bool) -> Result<()> {
@@ -140,12 +180,17 @@ pub fn run(login: bool) -> Result<()> {
                 clis: [CliStatus::Checking, CliStatus::Checking],
                 cli_generation: 0,
                 setup_open: false,
+                home_open: true,
+                dashboard: None,
+                dashboard_generation: 0,
+                home_sport: String::new(),
+                chart_metric: insights::Metric::Distance,
+                miles: true,
+                selected_period: None,
+                charts: HashMap::new(),
+                workout_pane: None,
             };
             if let Some(id) = app.sessions.first().map(|session| session.id.clone()) {
-                app.select(&id);
-            }
-            if let Some(session) = app.sessions.first() {
-                let id = session.id.clone();
                 app.select(&id);
             }
             app.refresh_overview(&cc.egui_ctx);
@@ -215,15 +260,128 @@ impl Desktop {
         }
     }
     fn refresh_overview(&mut self, ctx: &egui::Context) {
+        self.refresh_dashboard(ctx);
         let database = self.settings.database_path.clone();
         let sender = self.sender.clone();
         let ctx = ctx.clone();
         self.runtime.as_ref().unwrap().spawn(async move {
-            let result = data::open(std::path::Path::new(&database), false)
+            let result = data::open_readonly(std::path::Path::new(&database))
                 .and_then(|db| data::overview(&db));
             let _ = sender.send(Event::Overview(result));
             ctx.request_repaint();
         });
+    }
+    fn refresh_dashboard(&mut self, ctx: &egui::Context) {
+        self.dashboard_generation += 1;
+        let generation = self.dashboard_generation;
+        let database = self.settings.database_path.clone();
+        let sport = self.home_sport.clone();
+        let zone = self
+            .settings
+            .time_zone
+            .parse::<chrono_tz::Tz>()
+            .unwrap_or(chrono_tz::UTC);
+        let today = chrono::Utc::now().with_timezone(&zone).date_naive();
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        self.runtime.as_ref().unwrap().spawn(async move {
+            let result = data::open_readonly(std::path::Path::new(&database))
+                .and_then(|db| insights::dashboard(&db, today, &sport));
+            let _ = sender.send(Event::Dashboard {
+                generation,
+                result: Box::new(result),
+            });
+            ctx.request_repaint();
+        });
+    }
+    fn chart_key(database: &str, spec: &ChartSpec) -> String {
+        format!("{database}\0{}", spec.url())
+    }
+    fn request_chart(&mut self, database: &str, spec: &ChartSpec, ctx: &egui::Context) {
+        let key = Self::chart_key(database, spec);
+        if self.charts.contains_key(&key) {
+            return;
+        }
+        self.charts.insert(key.clone(), None);
+        let database = database.to_owned();
+        let spec = spec.clone();
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        self.runtime.as_ref().unwrap().spawn(async move {
+            let result = data::open_readonly(std::path::Path::new(&database))
+                .and_then(|db| insights::chart(&db, spec));
+            let _ = sender.send(Event::Chart { key, result });
+            ctx.request_repaint();
+        });
+    }
+    fn open_workout(&mut self, database: &str, id: i64, ctx: &egui::Context) {
+        let database = database.to_owned();
+        self.workout_pane = Some(WorkoutPane {
+            database: database.clone(),
+            id,
+            result: None,
+            activity_id: None,
+            activity: None,
+        });
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        self.runtime.as_ref().unwrap().spawn(async move {
+            let result = data::open_readonly(std::path::Path::new(&database))
+                .and_then(|db| insights::workout(&db, id));
+            let _ = sender.send(Event::Workout {
+                database,
+                id,
+                result,
+            });
+            ctx.request_repaint();
+        });
+    }
+    fn open_activity(&mut self, file_id: i64, ctx: &egui::Context) {
+        let Some(pane) = self.workout_pane.as_mut() else {
+            return;
+        };
+        pane.activity_id = Some(file_id);
+        pane.activity = None;
+        let database = pane.database.clone();
+        let id = pane.id;
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        self.runtime.as_ref().unwrap().spawn(async move {
+            let result = data::open_readonly(std::path::Path::new(&database))
+                .and_then(|db| data::activity(&db, file_id, 400));
+            let _ = sender.send(Event::Activity {
+                database,
+                id,
+                file_id,
+                result,
+            });
+            ctx.request_repaint();
+        });
+    }
+    fn draft_question(&mut self, question: String, database: &str) {
+        if self.busy {
+            return;
+        }
+        let matching = self
+            .selected
+            .as_ref()
+            .and_then(|id| self.store.get(id).ok())
+            .is_some_and(|s| s.database_path == database);
+        if !matching {
+            match self.store.create(&self.provider, database) {
+                Ok(session) => {
+                    self.select(&session.id);
+                    self.refresh_sessions();
+                }
+                Err(error) => {
+                    self.fail(error);
+                    return;
+                }
+            }
+        }
+        self.home_open = false;
+        self.input = question;
+        self.focus_input = true;
     }
     fn start_login(&mut self, ctx: &egui::Context) {
         if let Some(mut child) = self.login.take() {
@@ -333,6 +491,7 @@ impl Desktop {
             .create(&self.provider, &self.settings.database_path)
         {
             Ok(session) => {
+                self.home_open = false;
                 self.selected = Some(session.id);
                 self.messages.clear();
                 self.input.clear();
@@ -479,6 +638,8 @@ impl Desktop {
                     self.cancel = None;
                     match result {
                         Ok(value) => {
+                            self.charts.clear();
+                            self.refresh_dashboard(ctx);
                             self.overview = Some(value["overview"].clone());
                             self.status = format!(
                                 "History ready: {} exports imported, {} already complete.",
@@ -547,6 +708,41 @@ impl Desktop {
                         self.clis[index] = status;
                     }
                 }
+                Event::Dashboard { generation, result } => {
+                    if generation == self.dashboard_generation {
+                        self.dashboard = Some(*result);
+                    }
+                }
+                Event::Chart { key, result } => {
+                    if self.charts.contains_key(&key) {
+                        self.charts.insert(key, Some(result));
+                    }
+                }
+                Event::Workout {
+                    database,
+                    id,
+                    result,
+                } => {
+                    if let Some(pane) = self
+                        .workout_pane
+                        .as_mut()
+                        .filter(|p| p.database == database && p.id == id)
+                    {
+                        pane.result = Some(result);
+                    }
+                }
+                Event::Activity {
+                    database,
+                    id,
+                    file_id,
+                    result,
+                } => {
+                    if let Some(pane) = self.workout_pane.as_mut().filter(|p| {
+                        p.database == database && p.id == id && p.activity_id == Some(file_id)
+                    }) {
+                        pane.activity = Some(result);
+                    }
+                }
             }
         }
         if changed {
@@ -593,8 +789,13 @@ impl eframe::App for Desktop {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.events(ctx);
         self.sidebar(ctx);
-        self.composer(ctx);
-        self.conversation(ctx);
+        if self.home_open {
+            self.home_screen(ctx);
+        } else {
+            self.composer(ctx);
+            self.conversation(ctx);
+        }
+        self.workout_details(ctx);
         self.settings_ui(ctx);
         self.assistant_setup(ctx);
     }

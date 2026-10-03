@@ -5,6 +5,17 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{io::Read, path::Path};
 
+pub fn open_readonly(path: &Path) -> Result<Connection> {
+    if !path.is_file() {
+        return Err("Connect TrainingPeaks and import your history to get started.".into());
+    }
+    let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())?;
+    db.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    Ok(db)
+}
+
 pub fn open(path: &Path, create: bool) -> Result<Connection> {
     if !create && !path.is_file() {
         return Err(

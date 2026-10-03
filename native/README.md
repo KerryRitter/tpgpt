@@ -39,7 +39,11 @@ TRAININGPEAKS_DATABASE="$PWD/trainingpeaks.sqlite" cargo run --release -p tpgpt 
 
 Settings apply to new conversations. Existing conversations retain their database and provider. Select Codex or Claude, start a conversation, and send a question. The app saves its own conversation ID, the provider's native session ID, and message history in a separate `chat.sqlite`. It resumes Codex with `codex exec resume <id>` and Claude with `claude --resume <id>`. Prompts go over stdin and JSON events feed the native interface. **Stop** cancels a running import or CLI call; completed import windows are retained. Interrupted chats are recoverable after restart.
 
-The native chat UI renders Markdown, including headings, lists, tables, and code blocks. It restores your latest conversation when reopened, supports searching conversations and copying replies, and offers **Retry message** after a failed turn. Prompt cards help start a conversation. Press **Enter** (or **Ctrl/Cmd+Enter**) to send; use **Shift+Enter** for a new line. You can draft the next question while a reply is running.
+The app opens to **Overview** and keeps your latest conversation available in the sidebar. Overview shows this week's time, distance, recorded TSS and active days against the same days last week, an eight-week chart with sport and metric filters, recent workouts, and import freshness. Missing TSS and potentially repeated records are flagged; records are never silently merged. Only activity with recorded time, distance, or positive TSS contributes to the charts. Empty periods may represent missing imports.
+
+The native chat UI renders Markdown, including headings, lists, tables, and code blocks. It supports searching conversations and copying replies, and offers **Retry message** after a failed turn. Press **Enter** (or **Ctrl/Cmd+Enter**) to send; use **Shift+Enter** for a new line. You can draft the next question while a reply is running.
+
+Both assistants receive instructions for interactive answers on every turn, including resumed sessions. `get_training_chart` returns exact local data and a `tpgpt://chart` URL; a Markdown link with that URL expands into a native chart. `tpgpt://workout/ID` links and ordinary `#ID` citations open workout details, notes, heart-rate/speed graphs when available, and laps. Charts and details use the conversation's original database even after Settings changes. Selecting a chart bar or **Ask about this workout** prepares a question in the current conversation; you review and send it yourself. Dashboard and detail connections open SQLite in read-only mode. TrainingPeaks access remains login and importing only; there are no remote write actions.
 
 CLI paths can be names on `PATH` or absolute paths. The launcher also searches common user installation locations, including `.local/bin`, `.npm-global/bin`, and NVM installations. CLIs are external prerequisites and are not bundled. Training history stays in local SQLite; the chosen CLI sends requested context to its model provider under that provider's account and terms.
 
@@ -64,7 +68,7 @@ tpgpt --overview --database /absolute/path/trainingpeaks.sqlite
 tpgpt --mcp --database /absolute/path/trainingpeaks.sqlite
 ```
 
-The MCP inventory includes coverage, workout search and detail, exact summaries, comparisons, training load, records, activity detail, planning context, plan scaffolding, and locally saved plans. Plan writes are separate from imported workouts and never upload to TrainingPeaks. The assistant is instructed to save a plan only after an explicit request or approval.
+The MCP inventory includes coverage, workout search and detail, exact summaries, interactive charts, comparisons, training load, records, activity detail, planning context, plan scaffolding, and locally saved plans. Plan writes are separate from imported workouts and never upload to TrainingPeaks. The assistant is instructed to save a plan only after an explicit request or approval.
 
 The importer is also available without the UI:
 

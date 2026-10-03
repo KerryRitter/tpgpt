@@ -1,6 +1,6 @@
 [package]
 name = "tpgpt"
-version = "0.1.0"
+version = "0.1.1"
 description = "Native TrainingPeaks login, SQLite import, and CLI chat"
 edition = "2021"
 rust-version = "1.88"

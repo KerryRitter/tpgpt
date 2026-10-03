@@ -1,17 +1,24 @@
-use super::{CliStatus, Desktop};
+use super::{home, CliStatus, Desktop};
 use eframe::egui::{self, Align, Color32, FontId, Frame, Layout, RichText, Stroke, TextStyle, Ui};
 use egui_commonmark::CommonMarkViewer;
 use std::time::{Duration, Instant};
 
-const BACKGROUND: Color32 = Color32::from_rgb(14, 20, 29);
-const SIDEBAR: Color32 = Color32::from_rgb(19, 28, 39);
-const SURFACE: Color32 = Color32::from_rgb(26, 37, 50);
-const BORDER: Color32 = Color32::from_rgb(43, 57, 73);
-const TEXT: Color32 = Color32::from_rgb(234, 240, 247);
-const MUTED: Color32 = Color32::from_rgb(153, 170, 188);
-const ACCENT: Color32 = Color32::from_rgb(198, 237, 142);
-const TEAL: Color32 = Color32::from_rgb(121, 210, 201);
-const ERROR: Color32 = Color32::from_rgb(248, 163, 145);
+pub(super) const BACKGROUND: Color32 = Color32::from_rgb(246, 248, 250);
+pub(super) const SIDEBAR: Color32 = Color32::WHITE;
+pub(super) const SURFACE: Color32 = Color32::from_rgb(248, 250, 252);
+pub(super) const BORDER: Color32 = Color32::from_rgb(219, 227, 234);
+pub(super) const TEXT: Color32 = Color32::from_rgb(48, 48, 48);
+pub(super) const MUTED: Color32 = Color32::from_rgb(93, 108, 124);
+// Blues from TrainingPeaks' public pattern-library styling.
+pub(super) const ACCENT: Color32 = Color32::from_rgb(0, 86, 149);
+pub(super) const CHART_BLUE: Color32 = Color32::from_rgb(52, 155, 220);
+pub(super) const HOVER_BG: Color32 = Color32::from_rgb(237, 246, 252);
+pub(super) const SELECTED_BG: Color32 = Color32::from_rgb(222, 237, 249);
+pub(super) const USER_BG: Color32 = Color32::from_rgb(230, 241, 250);
+pub(super) const SUCCESS: Color32 = Color32::from_rgb(35, 122, 69);
+pub(super) const ERROR: Color32 = Color32::from_rgb(172, 43, 48);
+pub(super) const ERROR_BG: Color32 = Color32::from_rgb(255, 242, 242);
+pub(super) const ERROR_BORDER: Color32 = Color32::from_rgb(233, 189, 192);
 const READING_WIDTH: f32 = 800.0;
 const CODEX_INSTALL_DOCS: &str = "https://learn.chatgpt.com/docs/codex/cli";
 const CLAUDE_INSTALL_DOCS: &str = "https://code.claude.com/docs/en/quickstart";
@@ -29,7 +36,7 @@ pub(super) fn theme(ctx: &egui::Context) {
     style.spacing.item_spacing = egui::vec2(12.0, 10.0);
     style.spacing.button_padding = egui::vec2(14.0, 10.0);
     style.spacing.interact_size.y = 34.0;
-    style.visuals = egui::Visuals::dark();
+    style.visuals = egui::Visuals::light();
     let visuals = &mut style.visuals;
     visuals.override_text_color = Some(TEXT);
     visuals.weak_text_color = Some(MUTED);
@@ -41,9 +48,9 @@ pub(super) fn theme(ctx: &egui::Context) {
     visuals.text_edit_bg_color = Some(SURFACE);
     visuals.faint_bg_color = SIDEBAR;
     visuals.code_bg_color = SURFACE;
-    visuals.hyperlink_color = TEAL;
+    visuals.hyperlink_color = ACCENT;
     visuals.error_fg_color = ERROR;
-    visuals.selection.bg_fill = Color32::from_rgb(51, 78, 69);
+    visuals.selection.bg_fill = SELECTED_BG;
     visuals.selection.stroke = Stroke::new(1.0, ACCENT);
     for widget in [
         &mut visuals.widgets.noninteractive,
@@ -56,9 +63,9 @@ pub(super) fn theme(ctx: &egui::Context) {
         widget.corner_radius = 10.into();
     }
     for widget in [&mut visuals.widgets.hovered, &mut visuals.widgets.active] {
-        widget.bg_fill = Color32::from_rgb(39, 55, 68);
+        widget.bg_fill = HOVER_BG;
         widget.weak_bg_fill = widget.bg_fill;
-        widget.bg_stroke = Stroke::new(1.0, TEAL);
+        widget.bg_stroke = Stroke::new(1.0, ACCENT);
         widget.fg_stroke = Stroke::new(1.0, TEXT);
         widget.corner_radius = 10.into();
     }
@@ -70,6 +77,7 @@ pub(super) fn tool_status(name: &str) -> &'static str {
         "get_database_overview" => "Getting to know your training history…",
         "get_training_load" => "Looking at your training load and balance…",
         "summarize_training" => "Adding up your training…",
+        "get_training_chart" => "Building a chart from your training…",
         "compare_training_periods" => "Comparing your training blocks…",
         "search_workouts" => "Finding relevant workouts and notes…",
         "get_workout" | "get_activity_detail" => "Reading the workout details…",
@@ -81,11 +89,11 @@ pub(super) fn tool_status(name: &str) -> &'static str {
     }
 }
 
-fn muted(text: impl Into<String>) -> RichText {
+pub(super) fn muted(text: impl Into<String>) -> RichText {
     RichText::new(text).color(MUTED)
 }
 
-fn number(value: u64) -> String {
+pub(super) fn number(value: u64) -> String {
     let digits = value.to_string();
     let mut result = String::new();
     for (index, character) in digits.chars().enumerate() {
@@ -97,10 +105,10 @@ fn number(value: u64) -> String {
     result
 }
 
-fn mark(ui: &mut Ui, size: f32) {
+pub(super) fn mark(ui: &mut Ui, size: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let painter = ui.painter();
-    painter.rect_filled(rect, 10.0, Color32::from_rgb(42, 57, 43));
+    painter.rect_filled(rect, 10.0, ACCENT);
     let point = |x, y| egui::pos2(rect.left() + size * x, rect.top() + size * y);
     painter.add(egui::Shape::line(
         vec![
@@ -109,9 +117,9 @@ fn mark(ui: &mut Ui, size: f32) {
             point(0.52, 0.56),
             point(0.78, 0.27),
         ],
-        Stroke::new((size * 0.065).max(1.5), ACCENT),
+        Stroke::new((size * 0.065).max(1.5), Color32::WHITE),
     ));
-    painter.circle_filled(point(0.78, 0.27), size * 0.04, ACCENT);
+    painter.circle_filled(point(0.78, 0.27), size * 0.04, Color32::WHITE);
 }
 
 fn dot(ui: &mut Ui, color: Color32) {
@@ -132,9 +140,9 @@ fn cli_badge(ui: &mut Ui, status: &CliStatus, docs: &str) -> bool {
                         rect.min + egui::vec2(5.0, 12.0),
                         rect.min + egui::vec2(11.0, 4.0),
                     ],
-                    Stroke::new(2.0, ACCENT),
+                    Stroke::new(2.0, SUCCESS),
                 ));
-                ui.label(RichText::new("Installed").size(11.0).color(ACCENT))
+                ui.label(RichText::new("Installed").size(11.0).color(SUCCESS))
                     .on_hover_text(format!(
                         "{version}\n{}\nSign in through the CLI before chatting.",
                         path.display()
@@ -143,8 +151,11 @@ fn cli_badge(ui: &mut Ui, status: &CliStatus, docs: &str) -> bool {
             false
         }
         CliStatus::NotInstalled => {
-            ui.hyperlink_to(RichText::new("Not installed").size(11.0).color(TEAL), docs)
-                .on_hover_text("Open the official installation instructions.");
+            ui.hyperlink_to(
+                RichText::new("Not installed").size(11.0).color(ACCENT),
+                docs,
+            )
+            .on_hover_text("Open the official installation instructions.");
             false
         }
         CliStatus::Checking => {
@@ -175,8 +186,8 @@ fn column<R>(ui: &mut Ui, contents: impl FnOnce(&mut Ui) -> R) -> R {
     .inner
 }
 
-fn primary(text: &str) -> egui::Button<'_> {
-    egui::Button::new(RichText::new(text).strong().color(BACKGROUND))
+pub(super) fn primary(text: &str) -> egui::Button<'_> {
+    egui::Button::new(RichText::new(text).strong().color(Color32::WHITE))
         .fill(ACCENT)
         .stroke(Stroke::NONE)
         .corner_radius(10)
@@ -188,12 +199,8 @@ fn prompt_card(ui: &mut Ui, width: f32, index: usize, title: &str, detail: &str)
     ui.painter().rect(
         rect,
         14.0,
-        if hovered {
-            Color32::from_rgb(30, 44, 56)
-        } else {
-            SIDEBAR
-        },
-        Stroke::new(1.0, if hovered { TEAL } else { BORDER }),
+        if hovered { HOVER_BG } else { SIDEBAR },
+        Stroke::new(1.0, if hovered { ACCENT } else { BORDER }),
         egui::StrokeKind::Inside,
     );
     let mut child = ui.new_child(
@@ -205,11 +212,7 @@ fn prompt_card(ui: &mut Ui, width: f32, index: usize, title: &str, detail: &str)
     child.label(
         RichText::new(format!("0{}  /  EXPLORE", index + 1))
             .size(11.0)
-            .color(if index.is_multiple_of(2) {
-                ACCENT
-            } else {
-                TEAL
-            }),
+            .color(ACCENT),
     );
     child.label(RichText::new(title).strong().size(18.0));
     child.add(egui::Label::new(muted(detail).size(13.0)).wrap());
@@ -220,6 +223,7 @@ fn prompt_card(ui: &mut Ui, width: f32, index: usize, title: &str, detail: &str)
 
 impl Desktop {
     pub(super) fn sidebar(&mut self, ctx: &egui::Context) {
+        let compact = ctx.content_rect().height() < 780.0;
         egui::SidePanel::left("sidebar")
             .exact_width(270.0)
             .resizable(false)
@@ -234,27 +238,43 @@ impl Desktop {
                         ui.label(muted("Your training journal").size(12.0));
                     });
                 });
-                ui.add_space(24.0);
+                ui.add_space(if compact { 12.0 } else { 24.0 });
+                if ui
+                    .add_sized(
+                        [ui.available_width(), if compact { 34.0 } else { 38.0 }],
+                        egui::Button::new(RichText::new("Overview").color(if self.home_open {
+                            ACCENT
+                        } else {
+                            MUTED
+                        }))
+                        .selected(self.home_open),
+                    )
+                    .clicked()
+                {
+                    self.home_open = true;
+                }
                 if ui
                     .add_enabled(
                         !self.busy,
-                        primary("+  New conversation")
-                            .min_size(egui::vec2(ui.available_width(), 42.0)),
+                        primary("+  New conversation").min_size(egui::vec2(
+                            ui.available_width(),
+                            if compact { 36.0 } else { 42.0 },
+                        )),
                     )
                     .clicked()
                 {
                     self.new_chat();
                 }
-                ui.add_space(12.0);
+                ui.add_space(if compact { 8.0 } else { 12.0 });
                 Frame::new()
                     .fill(BACKGROUND)
                     .corner_radius(12)
-                    .inner_margin(14)
+                    .inner_margin(if compact { 10 } else { 14 })
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         let connected = self.auth.is_some();
                         ui.horizontal(|ui| {
-                            dot(ui, if connected { ACCENT } else { MUTED });
+                            dot(ui, if connected { SUCCESS } else { MUTED });
                             ui.label(
                                 RichText::new(if connected {
                                     "TrainingPeaks connected"
@@ -263,7 +283,7 @@ impl Desktop {
                                 })
                                 .size(13.0)
                                 .color(if connected {
-                                    ACCENT
+                                    SUCCESS
                                 } else {
                                     TEXT
                                 }),
@@ -271,41 +291,53 @@ impl Desktop {
                         });
                         if let Some(value) = &self.overview {
                             ui.add_space(4.0);
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new(number(
-                                            value["workouts"].as_u64().unwrap_or(0),
-                                        ))
-                                        .size(23.0)
-                                        .strong(),
-                                    );
-                                    ui.label(muted("workouts").size(12.0));
-                                });
-                                ui.add_space(14.0);
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new(number(
-                                            value["logical_files"].as_u64().unwrap_or(0),
-                                        ))
-                                        .size(23.0)
-                                        .strong(),
-                                    );
-                                    ui.label(muted("activity files").size(12.0));
-                                });
-                            });
-                            if let (Some(start), Some(end)) =
-                                (value["first_date"].as_str(), value["last_date"].as_str())
-                            {
-                                let date = |text: &str| {
-                                    chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
-                                        .map(|date| date.format("%b %Y").to_string())
-                                        .unwrap_or_else(|_| text.into())
-                                };
+                            if compact {
                                 ui.label(
-                                    muted(format!("{} – {}", date(start), date(end))).size(11.0),
-                                )
-                                .on_hover_text(format!("{start} to {end}"));
+                                    muted(format!(
+                                        "{} workouts · {} files",
+                                        number(value["workouts"].as_u64().unwrap_or(0)),
+                                        number(value["logical_files"].as_u64().unwrap_or(0))
+                                    ))
+                                    .size(12.0),
+                                );
+                            } else {
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui| {
+                                        ui.label(
+                                            RichText::new(number(
+                                                value["workouts"].as_u64().unwrap_or(0),
+                                            ))
+                                            .size(23.0)
+                                            .strong(),
+                                        );
+                                        ui.label(muted("workouts").size(12.0));
+                                    });
+                                    ui.add_space(14.0);
+                                    ui.vertical(|ui| {
+                                        ui.label(
+                                            RichText::new(number(
+                                                value["logical_files"].as_u64().unwrap_or(0),
+                                            ))
+                                            .size(23.0)
+                                            .strong(),
+                                        );
+                                        ui.label(muted("activity files").size(12.0));
+                                    });
+                                });
+                                if let (Some(start), Some(end)) =
+                                    (value["first_date"].as_str(), value["last_date"].as_str())
+                                {
+                                    let date = |text: &str| {
+                                        chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
+                                            .map(|date| date.format("%b %Y").to_string())
+                                            .unwrap_or_else(|_| text.into())
+                                    };
+                                    ui.label(
+                                        muted(format!("{} – {}", date(start), date(end)))
+                                            .size(11.0),
+                                    )
+                                    .on_hover_text(format!("{start} to {end}"));
+                                }
                             }
                         } else {
                             ui.label(muted("Connect to bring your history into focus.").size(13.0));
@@ -361,7 +393,7 @@ impl Desktop {
                             );
                         }
                     });
-                ui.add_space(20.0);
+                ui.add_space(if compact { 12.0 } else { 20.0 });
                 ui.label(muted("CONVERSATIONS").size(11.0).strong());
                 ui.add(
                     egui::TextEdit::singleline(&mut self.session_filter)
@@ -376,6 +408,7 @@ impl Desktop {
                 egui::ScrollArea::vertical()
                     .id_salt("sessions")
                     .max_height(history_height)
+                    .min_scrolled_height(0.0)
                     .show(ui, |ui| {
                         ui.set_min_height(history_height);
                         ui.set_width(ui.available_width());
@@ -388,7 +421,8 @@ impl Desktop {
                             .iter()
                             .filter(|session| session.title.to_lowercase().contains(&filter))
                         {
-                            let current = self.selected.as_deref() == Some(&session.id);
+                            let current =
+                                !self.home_open && self.selected.as_deref() == Some(&session.id);
                             let width = ui.available_width();
                             let (rect, response) = ui
                                 .allocate_exact_size(egui::vec2(width, 60.0), egui::Sense::click());
@@ -396,11 +430,7 @@ impl Desktop {
                                 ui.painter().rect_filled(
                                     rect,
                                     10.0,
-                                    if current {
-                                        Color32::from_rgb(37, 53, 49)
-                                    } else {
-                                        SURFACE
-                                    },
+                                    if current { SELECTED_BG } else { SURFACE },
                                 );
                             }
                             if current {
@@ -430,7 +460,9 @@ impl Desktop {
                                         MUTED
                                     }),
                                 )
-                                .truncate(),
+                                .truncate()
+                                .selectable(false)
+                                .sense(egui::Sense::hover()),
                             );
                             ui.painter().text(
                                 rect.min + egui::vec2(12.0, 36.0),
@@ -454,6 +486,7 @@ impl Desktop {
                         }
                     });
                 if let Some(id) = selected {
+                    self.home_open = false;
                     self.select(&id);
                     self.error = None;
                     self.focus_input = true;
@@ -550,12 +583,19 @@ impl Desktop {
         }
         ui.add_space(14.0);
         ui.horizontal(|ui| {
-            dot(ui, TEAL);
+            dot(ui, ACCENT);
             ui.label(muted(if self.overview.is_some() { "Your local history is ready. Pick a starting point or ask your own question." } else { "Connect TrainingPeaks to import your history, or choose a database in Settings." }).size(13.0));
         });
     }
 
     pub(super) fn conversation(&mut self, ctx: &egui::Context) {
+        let database = self
+            .selected
+            .as_ref()
+            .and_then(|id| self.sessions.iter().find(|s| &s.id == id))
+            .map(|s| s.database_path.clone())
+            .unwrap_or_else(|| self.settings.database_path.clone());
+        let mut actions = Vec::new();
         egui::CentralPanel::default().frame(Frame::new().fill(BACKGROUND).inner_margin(egui::Margin::symmetric(28, 20))).show(ctx, |ui| {
             let session = self.selected.as_ref().and_then(|id| self.sessions.iter().find(|session| &session.id == id));
             let title = session.filter(|session| session.title != "New chat").map(|session| session.title.as_str()).unwrap_or("Training journal");
@@ -566,11 +606,11 @@ impl Desktop {
                     ui.add(egui::Label::new(RichText::new(title).size(20.0).strong()).truncate());
                 });
                 Frame::new().fill(SURFACE).corner_radius(8).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
-                    ui.label(RichText::new(if provider == "codex" { "Codex" } else { "Claude" }).size(12.0).color(TEAL));
+                    ui.label(RichText::new(if provider == "codex" { "Codex" } else { "Claude" }).size(12.0).color(ACCENT));
                 });
             });
             ui.horizontal(|ui| {
-                dot(ui, TEAL);
+                dot(ui, ACCENT);
                 ui.label(muted("Grounded in your training history").size(12.0)).on_hover_text(session.map(|session| session.database_path.as_str()).unwrap_or(&self.settings.database_path));
             });
             ui.add_space(10.0);
@@ -590,7 +630,7 @@ impl Desktop {
                                 let width = (text.size().x + 36.0).clamp(130.0, max_width);
                                 ui.horizontal_top(|ui| {
                                     ui.add_space((ui.available_width() - width).max(0.0));
-                                    Frame::new().fill(Color32::from_rgb(35, 49, 66)).corner_radius(16).inner_margin(18).show(ui, |ui| {
+                                    Frame::new().fill(USER_BG).corner_radius(16).inner_margin(18).show(ui, |ui| {
                                         ui.set_width(width - 36.0);
                                         ui.label(muted("YOU").size(10.0).strong());
                                         ui.add(egui::Label::new(&message.content).wrap().selectable(true));
@@ -621,7 +661,7 @@ impl Desktop {
                                     if message.status == "failed" {
                                         let (partial, details) = message.content.split_once("\n\n[Turn interrupted: ").unwrap_or(("", &message.content));
                                         if !partial.is_empty() { CommonMarkViewer::new().show(ui, &mut self.markdown, partial); ui.add_space(12.0); }
-                                        Frame::new().fill(Color32::from_rgb(49, 33, 35)).stroke(Stroke::new(1.0, Color32::from_rgb(90, 58, 58))).corner_radius(12).inner_margin(16).show(ui, |ui| {
+                                        Frame::new().fill(ERROR_BG).stroke(Stroke::new(1.0, ERROR_BORDER)).corner_radius(12).inner_margin(16).show(ui, |ui| {
                                             ui.set_width(ui.available_width());
                                             ui.label(RichText::new("That reply couldn't be completed").strong().color(ERROR));
                                             ui.label(muted(if details.contains("OAuth") || details.contains("authenticate") { "Sign in to your assistant's CLI again, then retry this message." } else { "Your conversation is saved. You can retry this message." }).size(13.0));
@@ -633,7 +673,7 @@ impl Desktop {
                                     } else if message.content.is_empty() && message.status == "running" {
                                         ui.horizontal(|ui| { ui.spinner(); ui.label(muted(&self.status).size(14.0)); });
                                     } else {
-                                        CommonMarkViewer::new().show(ui, &mut self.markdown, &message.content);
+                                        home::answer(ui, &message.content, home::AnswerUi { markdown: &mut self.markdown, charts: &self.charts, database: &database, miles: self.miles, actions: &mut actions });
                                         if message.status == "interrupted" { ui.add_space(8.0); ui.label(RichText::new("Interrupted when the app closed. Send a message to continue.").size(12.0).color(ERROR)); }
                                     }
                                 });
@@ -646,6 +686,13 @@ impl Desktop {
             });
             if let Some(prompt) = retry { self.input = prompt; self.send(ctx); }
         });
+        for action in actions {
+            match action {
+                home::Interaction::Chart(spec) => self.request_chart(&database, &spec, ctx),
+                home::Interaction::Workout(id) => self.open_workout(&database, id, ctx),
+                home::Interaction::Question(prompt) => self.draft_question(prompt, &database),
+            }
+        }
     }
 
     pub(super) fn composer(&mut self, ctx: &egui::Context) {
@@ -663,7 +710,7 @@ impl Desktop {
                             .is_none_or(|message| message.status != "failed")
                     }) {
                         Frame::new()
-                            .fill(Color32::from_rgb(49, 33, 35))
+                            .fill(ERROR_BG)
                             .corner_radius(10)
                             .inner_margin(12)
                             .show(ui, |ui| {

@@ -4,6 +4,18 @@ A native Rust desktop app for chatting with your TrainingPeaks history through C
 
 Log in to TrainingPeaks, sync workouts and activity files into local SQLite, and ask about training volume, load, trends, or plans. Conversations are saved locally and resume the assistant's original CLI session.
 
+The home screen brings your week into focus with time, distance, recorded TSS, active days, and an eight-week chart. Filter by sport, switch miles/kilometers, and explore recent workouts. Answers can include interactive charts and workout links that open local metrics, notes, activity graphs, and laps. Click a chart period to draft a follow-up question for review before sending. TrainingPeaks remains read-only: no workouts or calendar entries are uploaded, changed, or deleted.
+
+## Security and privacy
+
+**TPGPT never sends your TrainingPeaks password or access token to an AI provider or a TPGPT server.** You enter your password in the TrainingPeaks login page; TPGPT does not collect or store it. The captured access token stays in memory and is used only for trusted TrainingPeaks HTTPS requests. It is never saved in SQLite, settings, or logs, or passed to the assistant CLI in its arguments or environment. Authentication and importing necessarily send credentials or the token to TrainingPeaks itself.
+
+**Your imported training database, activity files, settings, saved plans, and app conversation history are stored locally on your computer.** TPGPT has no hosted backend and does not automatically upload your database. You can select an existing local database in **Settings**.
+
+**Chat uses your chosen cloud assistant.** Codex or Claude sends your prompts and the training data it retrieves to answer your questions to OpenAI or Anthropic using your own account. That context leaves your computer when you chat; the app is not an offline AI service. Assistant authentication and its own session storage are managed by the CLI. Local storage does not mean that data shared with the assistant stays on your device.
+
+TrainingPeaks access is limited to login and importing. Plans remain local; TPGPT never uploads, changes, or deletes workouts or calendar entries in TrainingPeaks. Credentials, medical records, training databases, cached exports, and personal screenshots are excluded from the repository and release bundles. See [the security checks](docs/SECURITY.md) for implementation and release safeguards.
+
 ## Download and install
 
 Download a bundle from [GitHub Releases](https://github.com/KerryRitter/tpgpt/releases/latest).
@@ -38,14 +50,6 @@ TPGPT checks both CLIs at startup. A green check means the executable runs; **No
 Open TPGPT, log in to TrainingPeaks in its login window, then select **Sync history**. The initial import covers five years in three-month windows and can resume after interruption. If athlete detection fails, enter your numeric athlete ID in **Settings**.
 
 The desktop app is Rust with an egui chat interface and a Wry login webview. It has no JavaScript frontend or bundled Node runtime. A small embedded browser hook captures TrainingPeaks authorization headers. npm-installed assistant CLIs may require their own Node runtime.
-
-## Your data
-
-- Workouts, activity files, settings, and chat history stay in your user-data directory. An existing training database can be selected in **Settings**.
-- TrainingPeaks bearer tokens stay in memory and are not stored in the database, settings, logs, or assistant process environment.
-- The chosen assistant CLI sends prompts and requested training context to its model provider using your account. Its own session storage follows the CLI's configuration.
-- Saved plans remain local; TPGPT does not upload workouts or plans to TrainingPeaks.
-- No credentials, medical records, training databases, cached exports, or personal screenshots are included in this repository or its bundles.
 
 TPGPT is an independent project and is not affiliated with TrainingPeaks, OpenAI, or Anthropic. TrainingPeaks login and export use its private API, which may change.
 

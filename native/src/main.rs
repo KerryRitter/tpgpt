@@ -4,6 +4,7 @@ mod app;
 mod browser;
 mod data;
 mod importer;
+mod insights;
 mod mcp;
 mod process;
 mod store;

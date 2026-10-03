@@ -1,4 +1,4 @@
-use crate::{data, store::Result};
+use crate::{data, insights, store::Result};
 use chrono::Duration;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
@@ -35,6 +35,7 @@ pub fn tools() -> Value {
         tools.push(json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":readonly,"destructiveHint":false,"openWorldHint":false}}));
     };
     add("get_database_overview","Get workout coverage, athlete IDs, sports, files, and saved plans. Use to orient a new conversation.",json!({}),vec![],true);
+    add("get_training_chart","Get exact completed-activity chart data and an interactiveUrl for the native chat. Include [Explore chart](interactiveUrl) in your answer, using the returned URL verbatim. Charts are recomputed from local data, show missing TSS coverage, and never modify TrainingPeaks.",json!({"startDate":date,"endDate":date,"metric":{"type":"string","enum":["distance","hours","tss"]},"groupBy":{"type":"string","enum":["day","week"]},"workoutTypes":types}),vec!["startDate","endDate"],true);
     add("search_workouts","Search workout titles, descriptions and comments. Also lists recent workouts when query is omitted.",json!({"query":s,"startDate":date,"endDate":date,"workoutTypes":types,"limit":{"type":"integer","minimum":1,"maximum":100},"offset":{"type":"integer","minimum":0}}),vec![],true);
     add(
         "get_workout",
@@ -82,6 +83,15 @@ pub fn tools() -> Value {
 
 pub fn call(db: &mut Connection, name: &str, input: &Value) -> Result<Value> {
     match name {
+        "get_training_chart" => {
+            let spec: insights::ChartSpec =
+                serde_json::from_value(input.clone()).map_err(|e| e.to_string())?;
+            let url = spec.url();
+            let chart = insights::chart(db, spec)?;
+            Ok(
+                json!({"interactiveUrl":url,"chart":chart,"notes":"Completed imported activity only. Missing TSS is unknown. Potential repeated entries remain included. Use the interactive URL verbatim in a Markdown link."}),
+            )
+        }
         "get_database_overview" => data::overview(db),
         "search_workouts" => data::search(db, input),
         "summarize_training" => data::summarize(db, input),
@@ -376,7 +386,7 @@ mod tests {
     #[test]
     fn mcp_declares_all_tools_and_only_plan_save_writes() {
         let tools = tools();
-        assert_eq!(tools["tools"].as_array().unwrap().len(), 13);
+        assert_eq!(tools["tools"].as_array().unwrap().len(), 14);
         assert_eq!(
             tools["tools"]
                 .as_array()
@@ -386,6 +396,32 @@ mod tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn chart_tool_returns_a_valid_native_link_and_leaves_training_rows_unchanged() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("charts.sqlite");
+        {
+            let db = data::open(&path, true).unwrap();
+            db.execute("INSERT INTO workouts(id,athlete_id,stable_key,workout_date,workout_type,title,raw_json,first_seen_at,updated_at) VALUES (7,'42','7','2026-01-05','Run','Fixture','{}','test','test')",[]).unwrap();
+            db.execute(
+                "INSERT INTO workout_fields VALUES (7,'TimeTotalInHours','1.5')",
+                [],
+            )
+            .unwrap();
+        }
+        let before = std::fs::read(&path).unwrap();
+        let mut db = data::open_readonly(&path).unwrap();
+        let input = json!({"startDate":"2026-01-01","endDate":"2026-01-10","metric":"hours","workoutTypes":["Run"]});
+        let result = call(&mut db, "get_training_chart", &input).unwrap();
+        assert!(matches!(
+            insights::parse_link(result["interactiveUrl"].as_str().unwrap()).unwrap(),
+            insights::AnswerAction::Chart(_)
+        ));
+        assert_eq!(result["chart"]["totals"]["hours"], 1.5);
+        assert_eq!(insights::workout(&db, 7).unwrap()["workout"]["id"], 7);
+        assert!(insights::workout(&db, 8).is_err());
+        assert_eq!(before, std::fs::read(&path).unwrap());
     }
     #[test]
     fn plan_write_is_atomic_and_validates_dates() {
