@@ -28,15 +28,15 @@ TrainingPeaks access is limited to login and importing. Plans remain local; TPGP
 
 ## Download and install
 
-Download a bundle from [GitHub Releases](https://github.com/KerryRitter/tpgpt/releases/latest).
+Choose your operating system below to download TPGPT v0.1.2, or browse [GitHub Releases](https://github.com/KerryRitter/tpgpt/releases/latest).
 
 | Platform | Bundle | Installation |
 | --- | --- | --- |
-| Ubuntu / Debian, x86_64 | `tpgpt_VERSION_amd64.deb` | `sudo apt install ./tpgpt_VERSION_amd64.deb` |
-| Linux, x86_64 | `tpgpt-linux-x86_64.tar.gz` | Extract, install the runtime dependencies below, then run `./tpgpt` |
-| Windows, x86_64 | `tpgpt-windows-x86_64.zip` | Extract and open `TPGPT/tpgpt.exe` |
-| macOS, Apple Silicon | `tpgpt-macos-arm64.dmg` or `.zip` | Copy `TPGPT.app` into Applications |
-| macOS, Intel | `tpgpt-macos-x86_64.dmg` or `.zip` | Copy `TPGPT.app` into Applications |
+| Ubuntu / Debian, x86_64<br>[Download installer](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt_0.1.2_amd64.deb) | `tpgpt_0.1.2_amd64.deb` | `sudo apt install ./tpgpt_0.1.2_amd64.deb` |
+| Linux, x86_64<br>[Download app](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-linux-x86_64.tar.gz) | `tpgpt-linux-x86_64.tar.gz` | Extract, install the runtime dependencies below, then run `./tpgpt` |
+| Windows, x86_64<br>[Download app](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-windows-x86_64.zip) | `tpgpt-windows-x86_64.zip` | Extract and open `TPGPT/tpgpt.exe` |
+| macOS, Apple Silicon<br>[Download app](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-macos-arm64.dmg) · [ZIP option](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-macos-arm64.zip) | `tpgpt-macos-arm64.dmg` or `.zip` | Copy `TPGPT.app` into Applications |
+| macOS, Intel<br>[Download app](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-macos-x86_64.dmg) · [ZIP option](https://github.com/KerryRitter/tpgpt/releases/download/v0.1.2/tpgpt-macos-x86_64.zip) | `tpgpt-macos-x86_64.dmg` or `.zip` | Copy `TPGPT.app` into Applications |
 
 Linux releases are built on Ubuntu 22.04. The archive requires GTK 3, WebKitGTK 4.1, EGL, OpenGL, and xkbcommon; on Ubuntu/Debian:
 
