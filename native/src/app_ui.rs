@@ -1,6 +1,5 @@
 use super::{home, CliStatus, Desktop};
 use eframe::egui::{self, Align, Color32, FontId, Frame, Layout, RichText, Stroke, TextStyle, Ui};
-use egui_commonmark::CommonMarkViewer;
 use std::time::{Duration, Instant};
 
 pub(super) const BACKGROUND: Color32 = Color32::from_rgb(246, 248, 250);
@@ -179,6 +178,20 @@ fn column<R>(ui: &mut Ui, contents: impl FnOnce(&mut Ui) -> R) -> R {
         ui.add_space(gap);
         ui.allocate_ui_with_layout(egui::vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
             ui.set_width(width);
+            contents(ui)
+        })
+        .inner
+    })
+    .inner
+}
+
+fn assistant_reply<R>(ui: &mut Ui, contents: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.horizontal_top(|ui| {
+        mark(ui, 30.0);
+        let width = ui.available_width();
+        ui.vertical(|ui| {
+            ui.set_width(width);
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
             contents(ui)
         })
         .inner
@@ -638,45 +651,40 @@ impl Desktop {
                                 });
                                 return;
                             }
-                            ui.horizontal_top(|ui| {
-                                mark(ui, 30.0);
-                                let width = ui.available_width();
-                                ui.vertical(|ui| {
-                                    ui.set_width(width);
-                                    ui.horizontal(|ui| {
-                                        ui.label(RichText::new("TPGPT").strong().size(14.0));
-                                        ui.label(muted(if provider == "codex" { "with Codex" } else { "with Claude" }).size(12.0));
-                                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                            if !message.content.is_empty() && message.status != "failed" {
-                                                let copied = self.copied_message.is_some_and(|(id, at)| id == message.id && at.elapsed() < Duration::from_secs(2));
-                                                if ui.add(egui::Button::new(muted(if copied { "Copied" } else { "Copy" }).size(11.0)).frame(false)).clicked() {
-                                                    ctx.copy_text(message.content.clone());
-                                                    self.copied_message = Some((message.id, Instant::now()));
-                                                    ctx.request_repaint_after(Duration::from_secs(2));
-                                                }
+                            assistant_reply(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("TPGPT").strong().size(14.0));
+                                    ui.label(muted(if provider == "codex" { "with Codex" } else { "with Claude" }).size(12.0));
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        if !message.content.is_empty() && message.status != "failed" {
+                                            let copied = self.copied_message.is_some_and(|(id, at)| id == message.id && at.elapsed() < Duration::from_secs(2));
+                                            if ui.add(egui::Button::new(muted(if copied { "Copied" } else { "Copy" }).size(11.0)).frame(false)).clicked() {
+                                                ctx.copy_text(message.content.clone());
+                                                self.copied_message = Some((message.id, Instant::now()));
+                                                ctx.request_repaint_after(Duration::from_secs(2));
                                             }
-                                        });
+                                        }
                                     });
-                                    ui.add_space(4.0);
-                                    if message.status == "failed" {
-                                        let (partial, details) = message.content.split_once("\n\n[Turn interrupted: ").unwrap_or(("", &message.content));
-                                        if !partial.is_empty() { CommonMarkViewer::new().show(ui, &mut self.markdown, partial); ui.add_space(12.0); }
-                                        Frame::new().fill(ERROR_BG).stroke(Stroke::new(1.0, ERROR_BORDER)).corner_radius(12).inner_margin(16).show(ui, |ui| {
-                                            ui.set_width(ui.available_width());
-                                            ui.label(RichText::new("That reply couldn't be completed").strong().color(ERROR));
-                                            ui.label(muted(if details.contains("OAuth") || details.contains("authenticate") { "Sign in to your assistant's CLI again, then retry this message." } else { "Your conversation is saved. You can retry this message." }).size(13.0));
-                                            egui::CollapsingHeader::new("Error details").show(ui, |ui| { ui.add(egui::Label::new(muted(details).size(12.0)).wrap().selectable(true)); });
-                                            if index + 1 == self.messages.len() && ui.add_enabled(!self.busy, egui::Button::new("Retry message")).clicked() {
-                                                retry = self.messages[..index].iter().rev().find(|row| row.role == "user").map(|row| row.content.clone());
-                                            }
-                                        });
-                                    } else if message.content.is_empty() && message.status == "running" {
-                                        ui.horizontal(|ui| { ui.spinner(); ui.label(muted(&self.status).size(14.0)); });
-                                    } else {
-                                        home::answer(ui, &message.content, home::AnswerUi { markdown: &mut self.markdown, charts: &self.charts, database: &database, miles: self.miles, actions: &mut actions });
-                                        if message.status == "interrupted" { ui.add_space(8.0); ui.label(RichText::new("Interrupted when the app closed. Send a message to continue.").size(12.0).color(ERROR)); }
-                                    }
                                 });
+                                ui.add_space(4.0);
+                                if message.status == "failed" {
+                                    let (partial, details) = message.content.split_once("\n\n[Turn interrupted: ").unwrap_or(("", &message.content));
+                                    if !partial.is_empty() { home::markdown(ui, &mut self.markdown, partial); ui.add_space(12.0); }
+                                    Frame::new().fill(ERROR_BG).stroke(Stroke::new(1.0, ERROR_BORDER)).corner_radius(12).inner_margin(16).show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.label(RichText::new("That reply couldn't be completed").strong().color(ERROR));
+                                        ui.label(muted(if details.contains("OAuth") || details.contains("authenticate") { "Sign in to your assistant's CLI again, then retry this message." } else { "Your conversation is saved. You can retry this message." }).size(13.0));
+                                        egui::CollapsingHeader::new("Error details").show(ui, |ui| { ui.add(egui::Label::new(muted(details).size(12.0)).wrap().selectable(true)); });
+                                        if index + 1 == self.messages.len() && ui.add_enabled(!self.busy, egui::Button::new("Retry message")).clicked() {
+                                            retry = self.messages[..index].iter().rev().find(|row| row.role == "user").map(|row| row.content.clone());
+                                        }
+                                    });
+                                } else if message.content.is_empty() && message.status == "running" {
+                                    ui.horizontal(|ui| { ui.spinner(); ui.label(muted(&self.status).size(14.0)); });
+                                } else {
+                                    home::answer(ui, &message.content, home::AnswerUi { markdown: &mut self.markdown, charts: &self.charts, database: &database, miles: self.miles, actions: &mut actions });
+                                    if message.status == "interrupted" { ui.add_space(8.0); ui.label(RichText::new("Interrupted when the app closed. Send a message to continue.").size(12.0).color(ERROR)); }
+                                }
                             });
                             ui.add_space(12.0);
                         });
@@ -907,5 +915,120 @@ impl Desktop {
             open = false;
         }
         self.setup_open = open;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn assistant_prose_stays_inside_the_reading_column_after_resizing() {
+        let paragraph = "Steady training builds a useful baseline. Review the longer efforts alongside the easy sessions and use the recorded history to understand the progression. ".repeat(5);
+        let content = format!(
+            "{paragraph}\n\n| Week | Miles | Run TSS | Total TSS |\n| --- | --- | --- | --- |\n| Sep 14–20 | 24.5 | 280.0 | 310.0 |\n| Sep 21–27 | 30.0 | 330.0 | 360.0 |\n\n- **Progression:** {paragraph}\n- **Consistency:** {paragraph}\n  - A nested observation: {paragraph}\n\n{paragraph}"
+        );
+        let ctx = egui::Context::default();
+        theme(&ctx);
+        let mut markdown = egui_commonmark::CommonMarkCache::default();
+        let charts = HashMap::new();
+        let mut actions = Vec::new();
+        for width in [1280.0, 860.0, 1600.0, 1000.0] {
+            for _ in 0..3 {
+                let mut right_edge = 0.0;
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 5000.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::SidePanel::left("sidebar")
+                            .exact_width(270.0)
+                            .show(ctx, |_| {});
+                        egui::CentralPanel::default()
+                            .frame(Frame::new().inner_margin(egui::Margin::symmetric(28, 20)))
+                            .show(ctx, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        let available = ui.available_width();
+                                        right_edge = ui.cursor().left()
+                                            + (available - available.min(READING_WIDTH)) / 2.0
+                                            + available.min(READING_WIDTH);
+                                        column(ui, |ui| {
+                                            assistant_reply(ui, |ui| {
+                                                home::answer(
+                                                    ui,
+                                                    "| Date range for the training week | Total running distance in miles | Recorded running training stress | Recorded training stress for all sports |\n| --- | --- | --- | --- |\n| Sep 14–20 | 24.5 | 280.0 | 310.0 |",
+                                                    home::AnswerUi {
+                                                        markdown: &mut markdown,
+                                                        charts: &charts,
+                                                        database: "fixture.sqlite",
+                                                        miles: true,
+                                                        actions: &mut actions,
+                                                    },
+                                                );
+                                            });
+                                            ui.add_space(24.0);
+                                            assistant_reply(ui, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label(
+                                                        RichText::new("TPGPT").strong().size(14.0),
+                                                    );
+                                                    ui.label(muted("with Codex").size(12.0));
+                                                    ui.with_layout(
+                                                        Layout::right_to_left(Align::Center),
+                                                        |ui| {
+                                                            ui.add(
+                                                                egui::Button::new(
+                                                                    muted("Copy").size(11.0),
+                                                                )
+                                                                .frame(false),
+                                                            );
+                                                        },
+                                                    );
+                                                });
+                                                ui.add_space(4.0);
+                                                home::answer(
+                                                    ui,
+                                                    &content,
+                                                    home::AnswerUi {
+                                                        markdown: &mut markdown,
+                                                        charts: &charts,
+                                                        database: "fixture.sqlite",
+                                                        miles: true,
+                                                        actions: &mut actions,
+                                                    },
+                                                );
+                                            });
+                                        });
+                                    });
+                            });
+                    },
+                );
+                let mut rows = 0;
+                for shape in output.shapes {
+                    if let egui::Shape::Text(text) = shape.shape {
+                        assert!(!text.galley.elided, "reply must wrap without truncation");
+                        if matches!(text.galley.text(), "Sep 14–20" | "280.0" | "330.0") {
+                            assert_eq!(text.galley.rows.len(), 1, "table values remain readable");
+                        }
+                        for row in &text.galley.rows {
+                            rows += 1;
+                            assert!(
+                                text.pos.x + row.rect().right() <= right_edge + 1.0,
+                                "reply extends past {right_edge} at window width {width}: {}",
+                                text.galley.text()
+                            );
+                        }
+                    }
+                }
+                assert!(rows > 20, "long paragraphs and lists should wrap");
+            }
+        }
     }
 }

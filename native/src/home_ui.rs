@@ -531,13 +531,45 @@ pub(super) struct AnswerUi<'a> {
     pub miles: bool,
     pub actions: &'a mut Vec<Interaction>,
 }
+
+pub(super) fn markdown(ui: &mut Ui, cache: &mut egui_commonmark::CommonMarkCache, content: &str) {
+    let columns = pulldown_cmark::Parser::new_ext(content, pulldown_cmark::Options::ENABLE_TABLES)
+        .filter_map(|event| match event {
+            pulldown_cmark::Event::Start(pulldown_cmark::Tag::Table(columns)) => {
+                Some(columns.len())
+            }
+            _ => None,
+        })
+        .max();
+    // Grid column sizes are cached by egui. Resize without retaining widths
+    // measured for a larger window or for a table with fewer columns.
+    let layout_key = (
+        "answer_markdown",
+        ui.available_width().round() as i32,
+        columns,
+    );
+    ui.push_id(layout_key, |ui| {
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+        if let Some(columns) = columns.filter(|&columns| columns > 0) {
+            // CommonMark's grid inherits this minimum cell width. Give wrapping
+            // cells room to read while keeping the entire table inside the reply.
+            let cell_width = ((ui.available_width() - 16.0) / columns as f32).clamp(1.0, 160.0);
+            ui.spacing_mut().interact_size.x = cell_width;
+            // Grid stripes include the last cell's minimum width, while the
+            // enclosing frame measures its text. Keep the fill inside that frame.
+            ui.visuals_mut().faint_bg_color = Color32::TRANSPARENT;
+        }
+        egui_commonmark::CommonMarkViewer::new().show(ui, cache, content);
+    });
+}
+
 pub(super) fn answer(ui: &mut Ui, content: &str, state: AnswerUi<'_>) {
     let links = insights::links(content);
     state.markdown.link_hooks_clear();
     for url in insights::link_urls(content) {
         state.markdown.add_link_hook(url);
     }
-    egui_commonmark::CommonMarkViewer::new().show(ui, state.markdown, content);
+    markdown(ui, state.markdown, content);
     for (url, action) in &links {
         if state.markdown.get_link_hook(url) == Some(true) {
             match action {

@@ -6,6 +6,16 @@ Log in to TrainingPeaks, sync workouts and activity files into local SQLite, and
 
 The home screen brings your week into focus with time, distance, recorded TSS, active days, and an eight-week chart. Filter by sport, switch miles/kilometers, and explore recent workouts. Answers can include interactive charts and workout links that open local metrics, notes, activity graphs, and laps. Click a chart period to draft a follow-up question for review before sending. TrainingPeaks remains read-only: no workouts or calendar entries are uploaded, changed, or deleted.
 
+## Screenshots
+
+Explore your recent training from the overview.
+
+![TPGPT overview with weekly training metrics, sport filters, and an eight-week chart](docs/screenshots/overview.png)
+
+Continue a conversation with your training history and open referenced workouts.
+
+![TPGPT chat with a training analysis, comparison table, and interactive workout links](docs/screenshots/chat.png)
+
 ## Security and privacy
 
 **TPGPT never sends your TrainingPeaks password or access token to an AI provider or a TPGPT server.** You enter your password in the TrainingPeaks login page; TPGPT does not collect or store it. The captured access token stays in memory and is used only for trusted TrainingPeaks HTTPS requests. It is never saved in SQLite, settings, or logs, or passed to the assistant CLI in its arguments or environment. Authentication and importing necessarily send credentials or the token to TrainingPeaks itself.
@@ -14,7 +24,7 @@ The home screen brings your week into focus with time, distance, recorded TSS, a
 
 **Chat uses your chosen cloud assistant.** Codex or Claude sends your prompts and the training data it retrieves to answer your questions to OpenAI or Anthropic using your own account. That context leaves your computer when you chat; the app is not an offline AI service. Assistant authentication and its own session storage are managed by the CLI. Local storage does not mean that data shared with the assistant stays on your device.
 
-TrainingPeaks access is limited to login and importing. Plans remain local; TPGPT never uploads, changes, or deletes workouts or calendar entries in TrainingPeaks. Credentials, medical records, training databases, cached exports, and personal screenshots are excluded from the repository and release bundles. See [the security checks](docs/SECURITY.md) for implementation and release safeguards.
+TrainingPeaks access is limited to login and importing. Plans remain local; TPGPT never uploads, changes, or deletes workouts or calendar entries in TrainingPeaks. Credentials, medical records, training databases, and cached exports are excluded from the repository and release bundles. The two documentation screenshots above were explicitly selected for publication; other personal screenshots are excluded, and no screenshots are included in app bundles. See [the security checks](docs/SECURITY.md) for implementation and release safeguards.
 
 ## Download and install
 

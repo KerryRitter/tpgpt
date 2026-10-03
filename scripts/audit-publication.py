@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the Git index (or tracked working tree) without printing secret values."""
 import argparse
+import hashlib
 from pathlib import PurePosixPath
 import re
 import subprocess
@@ -12,6 +13,11 @@ ROOT_FILES = {
 }
 SOURCE_ROOTS = {'src', 'test', 'scripts', 'docs', '.github'}
 SOURCE_SUFFIXES = {'.rs', '.ts', '.js', '.py', '.sh', '.ps1', '.sql', '.md', '.yml', '.yaml', '.toml', '.json'}
+# Only these exact screenshots were selected by the owner for the public README.
+DOCUMENTATION_IMAGES = {
+    'docs/screenshots/overview.png': 'f8a116b3863a5f9153637a69b4d1f272a7a0672751aabca32c27c593f10a68f8',
+    'docs/screenshots/chat.png': '76ace88445d66a3f7276cf7cb9ebcc8ee910807e1c0154dbb8ad79e9b448c7d9',
+}
 PATTERNS = {
     'private key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'),
     'GitHub credential': re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,})'),
@@ -25,6 +31,8 @@ PATTERNS = {
 
 def allowed(path):
     p = PurePosixPath(path)
+    if path in DOCUMENTATION_IMAGES:
+        return True
     if path in ROOT_FILES:
         return True
     if path in {'native/Cargo.toml', 'native/README.md'}:
@@ -50,6 +58,10 @@ def main():
             failures.append((path, 'not an allowed source file'))
             continue
         data = subprocess.check_output(['git', 'cat-file', 'blob', object_id]) if args.staged else open(path, 'rb').read()
+        if path in DOCUMENTATION_IMAGES:
+            if hashlib.sha256(data).hexdigest() != DOCUMENTATION_IMAGES[path]:
+                failures.append((path, 'documentation screenshot differs from reviewed content'))
+            continue
         try:
             data.decode('utf-8')
         except UnicodeDecodeError:
@@ -63,7 +75,7 @@ def main():
         print(f'REJECTED: {path}: {reason}', file=sys.stderr)
     if failures or not count:
         return 1
-    print(f'Publication audit passed: {count} source files; no disallowed files or recognized credentials.')
+    print(f'Publication audit passed: {count} source/documentation files; no disallowed files or recognized credentials.')
     return 0
 
 

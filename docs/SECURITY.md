@@ -1,8 +1,8 @@
 # Publication and release checks
 
-The repository contains source and public dependency license notices. Local medical records, training databases, export caches, settings, credentials, and screenshots are excluded. `scripts/audit-publication.py --staged` checks the exact Git index before publishing; CI checks tracked source again. GitHub secret scanning and push protection are enabled.
+The repository contains source, public dependency license notices, and two documentation screenshots explicitly selected for publication. Local medical records, training databases, export caches, settings, credentials, and other personal screenshots are excluded. The screenshot exception is limited to `docs/screenshots/overview.png` and `docs/screenshots/chat.png`, with exact SHA-256 hashes pinned in the publication audit; changing their contents requires reviewing and updating that allowlist. `scripts/audit-publication.py --staged` checks the exact Git index before publishing; CI checks tracked source again. GitHub secret scanning and push protection are enabled.
 
-Bundles are assembled from explicit files in fresh staging directories. The release job accepts only the expected seven platform bundles and publishes SHA-256 checksums. No account login or personal training database is used by the release builds. Workflow actions are pinned to commit hashes and the downloaded audit tool is checked against a pinned SHA-256 digest.
+Bundles are assembled from explicit files in fresh staging directories; documentation screenshots are not packaged. The release job accepts only the expected seven platform bundles and publishes SHA-256 checksums. No account login or personal training database is used by the release builds. Workflow actions are pinned to commit hashes and the downloaded audit tool is checked against a pinned SHA-256 digest.
 
 Release CI runs `cargo audit` and `npm audit`; reported Rust vulnerabilities or high/critical npm findings block publication. The initial XML dependency was upgraded to quick-xml 0.41.0 to address RUSTSEC-2026-0194 and RUSTSEC-2026-0195.
 

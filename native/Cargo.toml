@@ -1,6 +1,6 @@
 [package]
 name = "tpgpt"
-version = "0.1.1"
+version = "0.1.2"
 description = "Native TrainingPeaks login, SQLite import, and CLI chat"
 edition = "2021"
 rust-version = "1.88"
@@ -8,6 +8,7 @@ rust-version = "1.88"
 [dependencies]
 eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 egui_commonmark = { version = "0.22", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false }
 wry = "0.55"
 tao = "0.34"
 serde = { version = "1", features = ["derive"] }
